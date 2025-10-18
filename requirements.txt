@@ -9,4 +9,5 @@ crewai
 # Gemini / Vertex AI (your crew imports GenerativeModel)
 google-cloud-aiplatform
 
+# bump build
 
