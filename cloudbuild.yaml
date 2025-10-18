@@ -13,3 +13,5 @@ steps:
            '--set-env-vars', 'VERTEX_LOCATION=us-central1']
 
 images: ['gcr.io/$PROJECT_ID/crewai-gcp:$COMMIT_SHA']
+options:
+  logging: CLOUD_LOGGING_ONLY
