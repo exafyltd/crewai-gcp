@@ -61,21 +61,18 @@ design_tests = Task(
   5. performance test (Lighthouse)
 Each element must be runnable code, NOT descriptions.""",
     agent=designer,
-    output_json=True,
 )
 
 create_prompt = Task(
     description="Write the mega-prompt for Lovable.",
     expected_output="Markdown string ≤ 8 000 tokens, no repetition, ends with END_PROMPT.",
     agent=engineer,
-    output_json=True,
 )
 
 assemble_pack = Task(
     description="Assemble final Task Pack JSON.",
     expected_output="Valid JSON that passes json_schema_validator exactly once.",
     agent=assembler,
-    output_json=True,
 )
 
 # ---------- CREW ----------
