@@ -18,6 +18,7 @@ pm = Agent(
     backstory="You excel at writing acceptance criteria and test cases.",
     verbose=False,
     allow_delegation=False,
+    model="gemini/gemini-2.5-pro"
 )
 
 designer = Agent(
@@ -26,6 +27,7 @@ designer = Agent(
     backstory="You never write prose—only runnable snippets.",
     verbose=False,
     allow_delegation=False,
+    model="gemini/gemini-2.5-pro"
 )
 
 engineer = Agent(
@@ -34,6 +36,7 @@ engineer = Agent(
     backstory="You compress requirements into clear instructions.",
     verbose=False,
     allow_delegation=False,
+    model="gemini/gemini-2.5-pro"
 )
 
 assembler = Agent(
@@ -42,6 +45,7 @@ assembler = Agent(
     backstory="You validate once and return pure JSON.",
     verbose=False,
     allow_delegation=False,
+    model="gemini/gemini-2.5-pro"
 )
 
 # ---------- TASKS ----------
