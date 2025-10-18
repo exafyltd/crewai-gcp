@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+WORKDIR /app
+
+# Install Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy crew file
+COPY prompt_synth_crew.py ./crews/
+
+# Install gunicorn for Cloud Run
+RUN pip install gunicorn
+
+# Copy tiny FastAPI wrapper (we’ll create it next)
+COPY main.py .
+
+ENV PORT 8080
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
