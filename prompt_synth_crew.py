@@ -1,6 +1,8 @@
 from crewai import Agent, Task, Crew, Process
 from pydantic import BaseModel
 import json, os
+from vertexai.preview.generative_models import GenerativeModel  # Google Cloud
+model = GenerativeModel("gemini-2.5-pro-exp-03-25")  # latest 2.5 Pro
 
 class TaskPack(BaseModel):
     work_item_id: str
