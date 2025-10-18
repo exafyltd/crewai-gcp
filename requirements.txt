@@ -4,3 +4,4 @@ google-cloud-pubsub>=2.18.0
 google-cloud-logging>=3.5.0
 fastapi==0.104.1
 gunicorn==21.2.0
+google-cloud-aiplatform>=1.38.0
