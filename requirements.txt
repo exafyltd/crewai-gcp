@@ -1,13 +1,16 @@
-fastapi
-uvicorn
-gunicorn
-pydantic
+# --- Web Framework ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
 
-# Crew orchestration
-crewai
+# Gunicorn is NOT needed on Cloud Run when using uvicorn directly (Cloud Run manages workers)
+# Remove gunicorn unless you explicitly run a custom container entrypoint with it
 
-# Gemini / Vertex AI (your crew imports GenerativeModel)
-google-cloud-aiplatform
+# --- Pydantic (FastAPI dependency) ---
+pydantic>=2.8.0
 
-# bump build
+# --- Vertex AI / Gemini ---
+google-cloud-aiplatform>=1.68.0
 
+# --- (Optional: If your app really waits on crewai logic) ---
+# Uncomment only if it's actually needed; most services shouldn't include heavy orchestration libs
+# crewai
