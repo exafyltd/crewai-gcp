@@ -1,19 +1,63 @@
-# --- New: CrewAI-powered endpoint (uses Crew -> Agent -> Task flow) ---
+# main.py
+import json
+import re
+from typing import List
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+# --------------- Pydantic contracts (adjust to your real ones) ---------------
+class WorkItem(BaseModel):
+    work_item_id: str
+    description: str
+
+
+class TaskPack(BaseModel):
+    work_item_id: str
+    prompt: str
+    tests: List[dict]
+    acceptance: List[str]
+    metadata: dict
+
+
+# ----------------- CrewAI / LiteLLM imports (adjust if needed) -----------------
+from crewai import Agent, Task, Crew  # type: ignore
+from litellm import vertex_gemini_25  # placeholder – use your real backend
+
+
+# --------------------------- FastAPI application ------------------------------
+app = FastAPI(title="Vitana Task-Pack Service", version="0.1.0")
+
+
+# -------------------------- CrewAI pipeline constants -------------------------
+MODEL_ID = "gemini-2.5-pro"  # change to your real model
+VERTEX_LOCATION = "us-central1"
+PROJECT_ID = "your-gcp-project-id"
+
+# LiteLLM-style LLM object that CrewAI understands
+crew_llm = vertex_gemini_25  # or however you wire Gemini 2.5
+
+
+# ------------------------------ health probe ----------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# ----------------------------- CrewAI endpoint --------------------------------
 @app.post("/crew", response_model=TaskPack)
 def crew_pipeline(item: WorkItem) -> TaskPack:
     """
     Minimal CrewAI integration that uses Vertex Gemini 2.5 via LiteLLM backend.
-    Sanitizes output to plain JSON (no markdown fences) for downstream use.
+    Sanitises output to plain JSON (no markdown fences) for downstream use.
     """
-    import re, json
 
     def to_plain_json(text: str) -> str:
         # 1) Strip fenced blocks ```json ... ``` or ``` ... ```
-        text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
-        text = re.sub(r"\s*```$", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.I)
+        text = re.sub(r"\s*```$", "", text, flags=re.I)
 
         # 2) If there's extra prose, attempt to extract the first JSON object
-        #    by locating the first '{' to the matching '}' using a simple stack.
         if not text.lstrip().startswith("{"):
             start = text.find("{")
             if start != -1:
@@ -24,8 +68,7 @@ def crew_pipeline(item: WorkItem) -> TaskPack:
                     elif text[i] == "}":
                         stack -= 1
                         if stack == 0:
-                            candidate = text[start:i+1]
-                            text = candidate
+                            text = text[start : i + 1]
                             break
 
         # 3) Validate it’s JSON; if not, fall back to raw text
@@ -33,7 +76,7 @@ def crew_pipeline(item: WorkItem) -> TaskPack:
             obj = json.loads(text)
             return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
         except Exception:
-            return text  # return best-effort string; clients can decide
+            return text
 
     try:
         synthesizer = Agent(
@@ -75,8 +118,14 @@ def crew_pipeline(item: WorkItem) -> TaskPack:
                 "engine": "CrewAI",
                 "model": MODEL_ID,
                 "location": VERTEX_LOCATION,
-                "project": PROJECT_ID
-            }
+                "project": PROJECT_ID,
+            },
         )
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"CrewAI pipeline failed: {str(e)}")
+
+
+# -------------------------- local dev entry-point -----------------------------
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
