@@ -2,15 +2,11 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 
-# Gunicorn is NOT needed on Cloud Run when using uvicorn directly (Cloud Run manages workers)
-# Remove gunicorn unless you explicitly run a custom container entrypoint with it
-
-# --- Pydantic (FastAPI dependency) ---
+# --- Core typing & validation ---
 pydantic>=2.8.0
 
 # --- Vertex AI / Gemini ---
 google-cloud-aiplatform>=1.68.0
 
-# --- (Optional: If your app really waits on crewai logic) ---
-# Uncomment only if it's actually needed; most services shouldn't include heavy orchestration libs
-# crewai
+# --- Crew Orchestration ---
+crewai
