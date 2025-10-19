@@ -16,3 +16,4 @@ steps:
       - '--set-env-vars=VERTEX_LOCATION=us-central1'
 
 images: ['us-central1-docker.pkg.dev/$PROJECT_ID/crewai-gcp/crewai-prompt-synth:$COMMIT_SHA']
+
