@@ -3,7 +3,8 @@ from pydantic import BaseModel
 import json, os
 from vertexai.preview.generative_models import GenerativeModel
 
-model = GenerativeModel("gemini-2.5-pro-exp-03-25")
+# Use Gemini 2.5 Pro via Vertex AI (no OpenAI key needed)
+gemini = GenerativeModel("gemini-2.5-pro-exp-03-25")
 
 class TaskPack(BaseModel):
     work_item_id: str
@@ -12,11 +13,13 @@ class TaskPack(BaseModel):
     acceptance: list
     metadata: dict
 
-pm = Agent(role="PM", goal=" clarify requirements", backstory="Senior PM", verbose=False)
-designer = Agent(role="Test Designer", goal=" output runnable test code", backstory="QA lead", verbose=False)
-engineer = Agent(role="Prompt Engineer", goal="write concise mega-prompt ≤ 8 k tokens", backstory="Staff engineer", verbose=False)
-assembler = Agent(role="Pack Assembler", goal=" output valid JSON", backstory="DevOps", verbose=False)
+# Agents forced to use Gemini
+pm = Agent(role="PM", goal="clarify requirements", backstory="Senior PM", llm=gemini, verbose=False)
+designer = Agent(role="Test Designer", goal="output runnable test code", backstory="QA lead", llm=gemini, verbose=False)
+engineer = Agent(role="Prompt Engineer", goal="write concise mega-prompt ≤ 8 k tokens", backstory="Staff engineer", llm=gemini, verbose=False)
+assembler = Agent(role="Pack Assembler", goal="output valid JSON", backstory="DevOps", llm=gemini, verbose=False)
 
+# Tasks
 analyze = Task(description="Analyze ticket", expected_output="Bullet list", agent=pm)
 design_tests = Task(description="Generate executable test code", expected_output="JSON array under key tests with 5 runnable code blocks", agent=designer)
 create_prompt = Task(description="Write mega-prompt", expected_output="Markdown string ≤ 8 k tokens", agent=engineer)
