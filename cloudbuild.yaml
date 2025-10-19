@@ -1,33 +1,18 @@
 steps:
-  # Build the container image using Artifact Registry path
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', '-t',
-      'us-central1-docker.pkg.dev/$PROJECT_ID/container-repo/crewai-gcp:$COMMIT_SHA',
-      '.'
-    ]
-
-  # Push the image to Artifact Registry
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/crewai-gcp/crewai-prompt-synth:$COMMIT_SHA', '.']
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'push',
-      'us-central1-docker.pkg.dev/$PROJECT_ID/container-repo/crewai-gcp:$COMMIT_SHA'
-    ]
-
-  # Deploy to Cloud Run using the pushed Artifact Registry image
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/crewai-gcp/crewai-prompt-synth:$COMMIT_SHA']
   - name: 'gcr.io/cloud-builders/gcloud'
-    args: [
-      'run', 'deploy', 'crewai-prompt-synth',
-      '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/container-repo/crewai-gcp:$COMMIT_SHA',
-      '--region', 'us-central1',
-      '--memory', '1Gi',
-      '--cpu', '2',
-      '--allow-unauthenticated',
-      '--set-env-vars', 'VERTEX_LOCATION=us-central1'
-    ]
+    args:
+      - 'run'
+      - 'deploy'
+      - 'crewai-prompt-synth'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/crewai-gcp/crewai-prompt-synth:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--memory=1Gi'
+      - '--cpu=2'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=VERTEX_LOCATION=us-central1'
 
-images:
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/container-repo/crewai-gcp:$COMMIT_SHA'
-
-options:
-  logging: CLOUD_LOGGING_ONLY
+images: ['us-central1-docker.pkg.dev/$PROJECT_ID/crewai-gcp/crewai-prompt-synth:$COMMIT_SHA']
