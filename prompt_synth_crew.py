@@ -1,51 +1,57 @@
 from crewai import Agent, Task, Crew, Process
 from pydantic import BaseModel
-import json, os
-# from vertexai.preview.generative_models import GenerativeModel  # Google Cloud
-# model = GenerativeModel("gemini-2.5-pro-exp-03-25")  # latest 2.5 Pro
+import json
+
+# ✅ MODEL & PROVIDER SETTINGS FOR GEMINI via Google Vertex AI
+GEMINI_MODEL = "gemini-2.5-pro-exp-03-25"  # Your selected model
+PROVIDER = "google"  # Explicitly avoids OpenAI
 
 class TaskPack(BaseModel):
     work_item_id: str
-    prompt: str
-    tests: list
-    acceptance: list
-    metadata: dict
+    prompt: str | None = None
+    tests: list | None = None
+    acceptance: list | None = None
+    metadata: dict | None = None
 
 # ---------- AGENTS ----------
 pm = Agent(
     role="Senior Product Manager",
     goal="Turn a one-liner ticket into a full Task Pack",
     backstory="You excel at writing acceptance criteria and test cases.",
-    verbose=False,
+    model=GEMINI_MODEL,
+    provider=PROVIDER,
+    verbose=True,
     allow_delegation=False,
-    model="gemini/gemini-2.5-pro"
 )
 
 designer = Agent(
     role="Test Designer",
     goal="Generate executable test code (Jest, SQL, Playwright, Lighthouse)",
-    backstory="You never write prose—only runnable snippets.",
-    verbose=False,
+    backstory="You never write prose—only runnable code blocks.",
+    model=GEMINI_MODEL,
+    provider=PROVIDER,
+    verbose=True,
     allow_delegation=False,
-    model="gemini/gemini-2.5-pro"
 )
 
 engineer = Agent(
     role="Prompt Engineer",
-    goal="Write a concise mega-prompt ≤ 8 000 tokens",
+    goal="Write a concise mega-prompt ≤ 8000 tokens",
     backstory="You compress requirements into clear instructions.",
-    verbose=False,
+    model=GEMINI_MODEL,
+    provider=PROVIDER,
+    verbose=True,
     allow_delegation=False,
-    model="gemini/gemini-2.5-pro"
 )
 
 assembler = Agent(
     role="Pack Assembler",
-    goal="Output valid JSON that passes Zod schema",
-    backstory="You validate once and return pure JSON.",
-    verbose=False,
+    goal="Validate output and produce final JSON",
+    backstory="You ensure schema correctness and return valid TaskPack.",
+    model=GEMINI_MODEL,
+    provider=PROVIDER,
+    verbose=True,
     allow_delegation=False,
-    model="gemini/gemini-2.5-pro"
 )
 
 # ---------- TASKS ----------
@@ -57,26 +63,31 @@ analyze = Task(
 
 design_tests = Task(
     description="Generate executable test code.",
-    expected_output="""JSON array under key "tests" with:
-  1. contract test (Jest + supertest)
-  2. migration SQL string
-  3. RLS policy SQL string
-  4. UI test (Playwright)
-  5. performance test (Lighthouse)
-Each element must be runnable code, NOT descriptions.""",
+    expected_output="""{
+      "tests": [
+        {"contract": "<jest code>"},
+        {"migration": "<sql>"},
+        {"rls_policy": "<sql>"},
+        {"ui_test": "<playwright>"},
+        {"performance": "<lighthouse>"}
+      ]
+    }""",
     agent=designer,
+    output_json=True,
 )
 
 create_prompt = Task(
     description="Write the mega-prompt for Lovable.",
-    expected_output="Markdown string ≤ 8 000 tokens, no repetition, ends with END_PROMPT.",
+    expected_output="Markdown string ≤ 8000 tokens, ends with END_PROMPT.",
     agent=engineer,
+    output_json=True,
 )
 
 assemble_pack = Task(
     description="Assemble final Task Pack JSON.",
-    expected_output="Valid JSON that passes json_schema_validator exactly once.",
+    expected_output="Valid JSON matching TaskPack schema.",
     agent=assembler,
+    output_json=True,
 )
 
 # ---------- CREW ----------
@@ -84,10 +95,14 @@ crew = Crew(
     agents=[pm, designer, engineer, assembler],
     tasks=[analyze, design_tests, create_prompt, assemble_pack],
     process=Process.sequential,
-    verbose=False,
+    verbose=True,
     memory=False,
 )
 
 def kickoff(work_item_id: str, description: str) -> TaskPack:
+    """
+    Run crew with inputs, return TaskPack.
+    """
     result = crew.kickoff(inputs={"work_item_id": work_item_id, "description": description})
-    return TaskPack(**json.loads(result.raw))
+    parsed = json.loads(result.raw)
+    return TaskPack(**parsed)
