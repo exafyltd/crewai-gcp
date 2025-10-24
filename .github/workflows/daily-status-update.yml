@@ -1,0 +1,22 @@
+name: Daily Status + Path Triggers
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC
+  push:
+    branches: [ "main", "feature/**", "governance-agents-**" ]
+    paths: ["crew_template/**","agents/**","services/**","scripts/**",".github/workflows/**"]
+  pull_request:
+    paths: ["crew_template/**","agents/**","services/**","scripts/**"]
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CI Collector
+        run: python3 scripts/ci/collect-status.py
+      - name: Post to Google Chat (if secret set)
+        if: ${{ secrets.DEVOPS_WEBHOOK != '' }}
+        run: |
+          curl -sS -X POST "${{ secrets.DEVOPS_WEBHOOK }}" \
+            -H 'Content-Type: application/json' \
+            --data-raw "{\"text\":\"🟢 CI Status: $GITHUB_REPOSITORY@${GITHUB_SHA::7} run $GITHUB_RUN_ID\"}"
