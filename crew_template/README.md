@@ -5,3 +5,4 @@ Authoritative scaffold for new crews:
 - /skills     : atomic actions
 - /packs      : curated skill sets by domain
 - /examples   : runnable templates + tests
+2025-10-24T20:34:45Z
