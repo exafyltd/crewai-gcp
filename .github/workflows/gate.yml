@@ -1,27 +1,66 @@
-      - name: Smoke test Cloud Run service
+      - name: Smoke test Cloud Run service (try all candidate URLs)
         shell: bash
         run: |
           set -euo pipefail
+
           SERVICE="${SERVICE:-crewai-gcp}"
           REGION="${REGION:-europe-west1}"
           PROJECT_ID="${PROJECT_ID:-lovable-vitana-vers1}"
+          PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' || true)"
 
-          echo "Discovering URL for service=$SERVICE region=$REGION project=$PROJECT_ID"
-          URL="$(gcloud run services describe "$SERVICE" \
+          echo "🔍 Discovering Cloud Run URLs..."
+          CANDIDATES=()
+
+          # 1) Canonical URL from Cloud Run
+          URL_MAIN="$(gcloud run services describe "$SERVICE" \
             --project="$PROJECT_ID" \
             --region="$REGION" \
-            --format='value(status.url)')"
+            --format='value(status.url)' || true)"
+          [[ -n "${URL_MAIN:-}" ]] && CANDIDATES+=("$URL_MAIN")
 
-          if [[ -z "$URL" ]]; then
-            echo "Failed to resolve Cloud Run URL"; exit 1
+          # 2) All services in region
+          while IFS= read -r u; do
+            [[ -n "$u" ]] && CANDIDATES+=("$u")
+          done < <(gcloud run services list \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --format='value(url)' || true)
+
+          # 3) Historical & pattern guesses
+          CANDIDATES+=(
+            "https://crewai-gcp-86804897789.europe-west1.run.app"
+            "https://crewai-gcp-q74ibpv6ia-ew.a.run.app"
+            "https://${SERVICE}-${PROJECT_ID}.${REGION}.run.app"
+            "https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
+          )
+
+          # Remove duplicates
+          uniq() { awk '!seen[$0]++'; }
+          mapfile -t CANDIDATES < <(printf "%s\n" "${CANDIDATES[@]}" | uniq)
+
+          echo "🌐 Candidate URLs to probe:"
+          printf ' - %s\n' "${CANDIDATES[@]}"
+
+          PASSED_URL=""
+          PAYLOAD_FILE="$(mktemp)"
+
+          for U in "${CANDIDATES[@]}"; do
+            echo "🚀 Probing: $U"
+            if (curl -fsS "$U/" >"$PAYLOAD_FILE") \
+            || (curl -fsS "$U/alive" >"$PAYLOAD_FILE") \
+            || (curl -fsS "$U/healthz" >"$PAYLOAD_FILE"); then
+              echo "✅ Success at: $U"
+              echo "Response:"
+              cat "$PAYLOAD_FILE"
+              PASSED_URL="$U"
+              break
+            else
+              echo "❌ No success at: $U"
+            fi
+          done
+
+          if [[ -z "$PASSED_URL" ]]; then
+            echo "❌ No endpoint succeeded. Listing all attempts:"
+            printf ' - %s\n' "${CANDIDATES[@]}"
+            exit 22
           fi
-
-          echo "Cloud Run URL: $URL"
-
-          # Try root first (current image returns 200 here), then /alive, then /healthz
-          (curl -fsS "$URL/"        | tee /tmp/health.txt) \
-          || (curl -fsS "$URL/alive"  | tee /tmp/health.txt) \
-          || (curl -fsS "$URL/healthz" | tee /tmp/health.txt)
-
-          echo "Health payload:"
-          cat /tmp/health.txt
