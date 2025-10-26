@@ -70,6 +70,7 @@ jobs:
               }" | tee /tmp/smoke_$t.json
             jq -e '.status' /tmp/smoke_$t.json >/dev/null
           done
+          
 
       - uses: actions/upload-artifact@v4
         with: { name: worker-core-smoke, path: /tmp/smoke_*.json }
