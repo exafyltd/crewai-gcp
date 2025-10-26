@@ -8,20 +8,25 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write   # required for GitHub → GCP OIDC
       contents: read
-      id-token: write   # required for WIF
     steps:
       - uses: actions/checkout@v4
 
-      - id: auth
+      - name: Auth to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-      - name: Deploy & smoke test (example)
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Whoami (sanity)
         run: |
-          gcloud run deploy worker-core \
-            --source . \
-            --region us-central1 \
-            --quiet
+          gcloud auth list
+          gcloud projects describe "$PROJECT_ID" --format="value(projectNumber,projectId)"
+        env:
+          PROJECT_ID: lovable-vitana-vers1
+
+      # TODO: build / deploy / smoke steps here
