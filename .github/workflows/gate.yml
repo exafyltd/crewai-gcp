@@ -5,6 +5,8 @@ on:
     paths:
       - "services/agents/worker-core/**"
       - "crew_template/schemas/**"
+      - ".github/workflows/gate.yml"
+
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -29,5 +31,8 @@ jobs:
           RUN_URL=$(gcloud run services describe $SERVICE --region ${GCP_REGION} --format='value(status.url)')
           for i in {1..5}; do curl -fsS "$RUN_URL/health" && break || sleep 2; done
           for t in maxina earthlings alkalma; do
-            curl -fsS -X POST "$RUN_URL/execute" -H 'Content-Type: application/json' -d "{\"plan_id\":\"smoke-$t\",\"tenant\":\"$t\",\"tasks\":[{\"id\":\"t1\",\"skill\":\"router.invoke_llm\",\"input\":{\"prompt\":\"ping\"}}],\"budget\":{\"tokens_max\":1000,\"cost_max_usd\":0.10}}" | jq -e '.status'
+            curl -fsS -X POST "$RUN_URL/execute" \
+              -H 'Content-Type: application/json' \
+              -d "{\"plan_id\":\"smoke-$t\",\"tenant\":\"$t\",\"tasks\":[{\"id\":\"t1\",\"skill\":\"router.invoke_llm\",\"input\":{\"prompt\":\"ping\"}}],\"budget\":{\"tokens_max\":1000,\"cost_max_usd\":0.10}}" \
+              | jq -e '.status' >/dev/null
           done
