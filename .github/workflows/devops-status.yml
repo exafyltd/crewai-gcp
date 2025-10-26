@@ -8,4 +8,4 @@
           echo "Cloud Run URL: $URL"
 
           # Try root first (works on your service), then /alive, then /healthz
-          curl -fsS "$URL/" || curl -fsS "$URL/alive" || curl -fsS "$URL/healthz"
+          (curl -fsS "/" || curl -fsS "/alive" || curl -fsS "/healthz")
