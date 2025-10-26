@@ -25,6 +25,6 @@ jobs:
 
       - name: Test endpoints
         run: |
-          URL=https://crewai-gcp-86804897789.europe-west1.run.app
+          URL=$(gcloud run services describe crewai-gcp --project=lovable-vitana-vers1 --region=europe-west1 --format="value(status.url)")
           curl -s "$URL/alive"
           curl -s "$URL/"
