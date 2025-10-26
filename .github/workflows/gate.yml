@@ -16,12 +16,13 @@ jobs:
       - name: Auth to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: projects/86804897789/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider
-          service_account: gha-deployer@lovable-vitana-vers1.iam.gserviceaccount.com
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      # keep this for one more run; remove later if you want
       - name: Debug WIF token
         run: |
           set -euo pipefail
@@ -29,3 +30,5 @@ jobs:
           tok=$(gcloud auth print-access-token)
           echo "access token length: ${#tok}"
           test ${#tok} -gt 100
+
+      # TODO: build / deploy / smoke steps here
