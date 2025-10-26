@@ -1,4 +1,4 @@
-name: Quick Gate — worker-core
+name: Gate-Quick
 on:
   workflow_dispatch:
   push:
