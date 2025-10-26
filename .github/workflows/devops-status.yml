@@ -22,3 +22,9 @@ jobs:
             --port=8080 \
             --no-use-http2 \
             --service-account=lovable-vitana-vers1@appspot.gserviceaccount.com
+
+      - name: Test endpoints
+        run: |
+          URL=https://crewai-gcp-86804897789.europe-west1.run.app
+          curl -s "$URL/alive"
+          curl -s "$URL/"
