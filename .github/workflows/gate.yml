@@ -1,4 +1,34 @@
-      - name: Smoke test Cloud Run service (try all candidate URLs)
+name: Gate-Quick
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      PROJECT_ID: lovable-vitana-vers1
+      REGION: europe-west1
+      SERVICE: crewai-gcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: ">= 492.0.0"
+
+      - name: Smoke test Cloud Run service (purely dynamic URL discovery)
         shell: bash
         run: |
           set -euo pipefail
@@ -6,61 +36,42 @@
           SERVICE="${SERVICE:-crewai-gcp}"
           REGION="${REGION:-europe-west1}"
           PROJECT_ID="${PROJECT_ID:-lovable-vitana-vers1}"
-          PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' || true)"
 
-          echo "🔍 Discovering Cloud Run URLs..."
+          # Build candidate list dynamically
           CANDIDATES=()
 
-          # 1) Canonical URL from Cloud Run
-          URL_MAIN="$(gcloud run services describe "$SERVICE" \
-            --project="$PROJECT_ID" \
-            --region="$REGION" \
+          # a) Canonical URL for the service
+          MAIN_URL="$(gcloud run services describe "$SERVICE" \
+            --project="$PROJECT_ID" --region="$REGION" \
             --format='value(status.url)' || true)"
-          [[ -n "${URL_MAIN:-}" ]] && CANDIDATES+=("$URL_MAIN")
+          [[ -n "${MAIN_URL:-}" ]] && CANDIDATES+=("$MAIN_URL")
 
-          # 2) All services in region
+          # b) All service URLs in region (extra safety)
           while IFS= read -r u; do
             [[ -n "$u" ]] && CANDIDATES+=("$u")
           done < <(gcloud run services list \
-            --project="$PROJECT_ID" \
-            --region="$REGION" \
-            --format='value(url)' || true)
+                    --project="$PROJECT_ID" --region="$REGION" \
+                    --format='value(url)' || true)
 
-          # 3) Historical & pattern guesses
-          CANDIDATES+=(
-            "https://crewai-gcp-86804897789.europe-west1.run.app"
-            "https://crewai-gcp-q74ibpv6ia-ew.a.run.app"
-            "https://${SERVICE}-${PROJECT_ID}.${REGION}.run.app"
-            "https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
-          )
+          # De-duplicate candidates
+          mapfile -t CANDIDATES < <(printf '%s\n' "${CANDIDATES[@]}" | awk '!seen[$0]++')
 
-          # Remove duplicates
-          uniq() { awk '!seen[$0]++'; }
-          mapfile -t CANDIDATES < <(printf "%s\n" "${CANDIDATES[@]}" | uniq)
-
-          echo "🌐 Candidate URLs to probe:"
+          echo "Candidate URLs to probe:"
           printf ' - %s\n' "${CANDIDATES[@]}"
 
-          PASSED_URL=""
-          PAYLOAD_FILE="$(mktemp)"
-
+          # Probe each candidate until one returns 2xx on / or /alive or /healthz
+          PAYLOAD_FILE=$(mktemp)
           for U in "${CANDIDATES[@]}"; do
-            echo "🚀 Probing: $U"
+            echo "Probing: $U"
             if (curl -fsS "$U/" >"$PAYLOAD_FILE") \
-            || (curl -fsS "$U/alive" >"$PAYLOAD_FILE") \
-            || (curl -fsS "$U/healthz" >"$PAYLOAD_FILE"); then
+               || (curl -fsS "$U/alive" >"$PAYLOAD_FILE") \
+               || (curl -fsS "$U/healthz" >"$PAYLOAD_FILE"); then
               echo "✅ Success at: $U"
               echo "Response:"
               cat "$PAYLOAD_FILE"
-              PASSED_URL="$U"
-              break
-            else
-              echo "❌ No success at: $U"
+              exit 0
             fi
           done
 
-          if [[ -z "$PASSED_URL" ]]; then
-            echo "❌ No endpoint succeeded. Listing all attempts:"
-            printf ' - %s\n' "${CANDIDATES[@]}"
-            exit 22
-          fi
+          echo "❌ No candidate URL returned 2xx on (/, /alive, /healthz). Failing."
+          exit 22
