@@ -10,6 +10,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      PROJECT_ID: lovable-vitana-vers1
+      REGION: europe-west1
+      AR_REPO: app
+      SERVICE: crewai-gcp
     steps:
       - uses: actions/checkout@v4
 
@@ -21,14 +26,50 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: ">= 492.0.0"
 
-      # keep this for one more run; remove later if you want
-      - name: Debug WIF token
+      - name: Ensure Artifact Registry repo exists
         run: |
           set -euo pipefail
-          gcloud auth list
-          tok=$(gcloud auth print-access-token)
-          echo "access token length: ${#tok}"
-          test ${#tok} -gt 100
+          if ! gcloud artifacts repositories describe "$AR_REPO" \
+               --location="$REGION" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "$AR_REPO" \
+              --location="$REGION" --repository-format=docker \
+              --description="Docker images for VITANA"
+          fi
 
-      # TODO: build / deploy / smoke steps here
+      - name: Configure AR Docker auth
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          set -euo pipefail
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${GITHUB_SHA}"
+          echo "Building $IMAGE"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: |
+          set -euo pipefail
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${GITHUB_SHA}"
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=3
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+          echo "URL=$URL"
+          curl -fsS "$URL/healthz" | tee /tmp/health.txt
+          grep -qi "ok" /tmp/health.txt
