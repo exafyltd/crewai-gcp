@@ -38,14 +38,44 @@ jobs:
 
       - name: Deploy & smoke
         run: |
+          set -e
+          echo "::group::Deploy worker-core"
           gcloud run deploy "$SERVICE" --source services/agents/worker-core --region "${GCP_REGION}" --allow-unauthenticated --quiet
           RUN_URL="$(gcloud run services describe "$SERVICE" --region "${GCP_REGION}" --format='value(status.url)')"
-          # warm-up: allow time for new revision to become ready
-          for i in {1..15}; do curl -fsS "$RUN_URL/health" && break || sleep 2; done
+          echo "RUN_URL=$RUN_URL"
+          echo "::endgroup::"
+
+          echo "::group::Warm-up"
+          # up to ~60s warm-up
+          for i in {1..30}; do
+            if curl -fsS "$RUN_URL/health" >/dev/null; then
+              echo "Warm OK on try $i"
+              break
+            fi
+            sleep 2
+          done
+          # Show revision & top condition (debug)
+          gcloud run services describe "$SERVICE" --region "${GCP_REGION}" \
+            --format='value(status.latestCreatedRevisionName,status.conditions[-1].message,status.conditions[-1].status,status.conditions[-1].type)'
+          echo "::endgroup::"
+
+          echo "::group::Smoke tenants"
+          set +e
+          FAIL=0
           for t in maxina earthlings alkalma; do
             echo "== smoke: tenant=$t"
-            curl -fsS -X POST "$RUN_URL/execute" \
+            RESP=$(curl -fsS -X POST "$RUN_URL/execute" \
               -H 'Content-Type: application/json' \
-              -d "{\"plan_id\":\"smoke-$t\",\"tenant\":\"$t\",\"tasks\":[{\"id\":\"t1\",\"skill\":\"router.invoke_llm\",\"input\":{\"prompt\":\"ping\"}}],\"budget\":{\"tokens_max\":1000,\"cost_max_usd\":0.10}}" \
-              | jq -e '.status' >/dev/null
+              -d "{\"plan_id\":\"smoke-$t\",\"tenant\":\"$t\",\"tasks\":[{\"id\":\"t1\",\"skill\":\"router.invoke_llm\",\"input\":{\"prompt\":\"ping\"}}],\"budget\":{\"tokens_max\":1000,\"cost_max_usd\":0.10}}")
+            echo "$RESP"
+            echo "$RESP" | jq -e '.status' >/dev/null || FAIL=1
           done
+          set -e
+          echo "::endgroup::"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::group::SERVICE LOGS (last 200 lines)"
+            gcloud run services logs read "$SERVICE" --region "${GCP_REGION}" --limit=200 || true
+            echo "::endgroup::"
+            exit 1
+          fi
