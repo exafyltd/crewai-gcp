@@ -1,0 +1,33 @@
+name: Gate-Quick
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "services/agents/worker-core/**"
+      - "crew_template/schemas/**"
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, id-token: write }
+    env:
+      GCP_PROJECT: lovable-vitana-vers1
+      GCP_REGION: us-central1
+      SERVICE: worker-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+        with: { project_id: ${{ env.GCP_PROJECT }}, export_default_credentials: true }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Deploy & smoke
+        run: |
+          gcloud run deploy $SERVICE --source services/agents/worker-core --region ${GCP_REGION} --allow-unauthenticated --quiet
+          RUN_URL=$(gcloud run services describe $SERVICE --region ${GCP_REGION} --format='value(status.url)')
+          for i in {1..5}; do curl -fsS "$RUN_URL/health" && break || sleep 2; done
+          for t in maxina earthlings alkalma; do
+            curl -fsS -X POST "$RUN_URL/execute" -H 'Content-Type: application/json' -d "{\"plan_id\":\"smoke-$t\",\"tenant\":\"$t\",\"tasks\":[{\"id\":\"t1\",\"skill\":\"router.invoke_llm\",\"input\":{\"prompt\":\"ping\"}}],\"budget\":{\"tokens_max\":1000,\"cost_max_usd\":0.10}}" | jq -e '.status'
+          done
